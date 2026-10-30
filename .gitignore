@@ -1,5 +1,6 @@
-﻿ig_chrome_profile/
-yes_words.csv
+ig_chrome_profile/
 __pycache__/
 .venv/
 .env
+tempCodeRunnerFile.py
+*.log

@@ -1,7 +1,5 @@
 import csv
 import logging
-#import os
-#import random
 import sys
 import time
 from pathlib import Path
@@ -22,12 +20,12 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
 # 1. SINGLE-VARIABLE MODE SWITCH
-SOURCE: Literal["csv", "llm"] = "llm"  # <-- Change to "csv" or "llm"
+SOURCE: Literal["csv", "llm"] = "csv"  # <-- Change to "csv" or "llm"
 
 # 2. CONFIGURATION
 POLL_INTERVAL_SEC: float = 3.0
 CSV_BURST_DELAY_SEC: float = 0.8  # Delay between messages in CSV mode
-CSV_FILE_PATH: Path = Path("yes_words.csv")
+CSV_FILE_PATH: Path = Path("C:/Users/ergan/Programming/ig-dm-bot.py/yes_words.csv")
 CHROME_PROFILE_DIR: Path = Path("./ig_chrome_profile").resolve()
 
 LM_STUDIO_URL: str = "http://localhost:1234/v1/chat/completions"
@@ -36,13 +34,15 @@ SYSTEM_PROMPT: str = (
     "You are a charming, witty guy texting a close friend (a girl) on Instagram DM. "
     "Reply with a short, playfully flirty line in natural Hinglish (Hindi written in English script). "
     "Keep it to one sentence, under 15 words. "
+    "Always use 'bolunga' instead of 'bolungi' as you are a straight man. "
     "Sound like a real person from a metro city—use casual spelling, lowercase, and maybe one emoji. "
     "Be a bit teasing, a bit sincere. For example: 'tumhari smile toh insta feed se bhi zyada bright hai yaar'. "
-    "Never use roleplay asterisks, formal 'aap', or pure English. No cringe pickup lines."
+    "Never use roleplay asterisks, formal 'aap', or pure English. No cringe pickup lines. "
+    "Do not use the '!' mark."
 )
 
 # Configure structured console logging
-logging.basicConfig(
+logging.basicConfig(    
     level=logging.INFO,
     format="%(asctime)s | %(levelname)-7s | %(message)s",
     datefmt="%H:%M:%S",
@@ -329,30 +329,37 @@ def run_csv_mode(driver: webdriver.Chrome) -> int:
         logger.info(f"Created sample {CSV_FILE_PATH} with {len(default_words)} words.")
 
     with CSV_FILE_PATH.open("r", encoding="utf-8-sig") as f:
-        words = [
+        raw_words = [
             cell.strip()
             for row in csv.reader(f)
             for cell in row
             if cell.strip()
         ]
+        # Deduplicate while preserving CSV order
+        words = list(dict.fromkeys(raw_words))
 
     if not words:
         raise ValueError(f"{CSV_FILE_PATH} is empty. Add words before running CSV mode.")
 
-    logger.info(f"CSV Mode active | Loaded {len(words)} words from {CSV_FILE_PATH}")
+    total_words = len(words)
+    logger.info(f"CSV Mode active | Loaded {total_words} unique words from {CSV_FILE_PATH}")
     sent_count = 0
-    word_index = 0
 
-    while True:
+    for idx, word in enumerate(words, start=1):
         _latest_msg, _is_friend = get_latest_message(driver)
-        word = words[word_index % len(words)]
-        word_index += 1
 
         if send_dm_message(driver, word):
             sent_count += 1
-            logger.info(f"[CSV #{sent_count}] Sent: {word}")
+            logger.info(f"[CSV {idx}/{total_words}] Sent: {word}")
+        else:
+            logger.warning(f"[CSV {idx}/{total_words}] Failed to send: {word}")
 
-        time.sleep(CSV_BURST_DELAY_SEC)
+        # Only wait between messages, not after the final word
+        if idx < total_words:
+            time.sleep(CSV_BURST_DELAY_SEC)
+
+    logger.info(f"All {total_words} words processed ({sent_count} sent). Terminating...")
+    return sent_count
 
 
 # 5. ENGINE B: LM STUDIO FLIRTY AUTO-REPLY MODE
